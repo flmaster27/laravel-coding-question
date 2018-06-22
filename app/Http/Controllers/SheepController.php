@@ -91,7 +91,7 @@ class SheepController extends Controller
     public function kill()
     {
         $pens = self::PENS_ID;
-        //shuffle($pens);
+        shuffle($pens);
 
         foreach ($pens as $pen) {
 
