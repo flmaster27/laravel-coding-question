@@ -62,6 +62,8 @@ class SheepController extends Controller
 
     /**
      * Добавляем овцу в случайный загон при условии, что их в нем больше 1
+     *
+     * @param $day
      */
     public function add($day)
     {
@@ -92,6 +94,8 @@ class SheepController extends Controller
 
     /**
      * Отправляем овцу на забой
+     *
+     * @param $day
      */
     public function kill($day)
     {
@@ -122,7 +126,7 @@ class SheepController extends Controller
     /**
      * Загоняем овцу в загон $to из самого заполненного загона
      *
-     * @param $to
+     * @param $day
      */
     private function move($day)
     {
@@ -156,6 +160,7 @@ class SheepController extends Controller
      *
      * @param $text
      * @param $obj
+     * @param $day
      */
     private function writeLog($text, $obj, $day)
     {

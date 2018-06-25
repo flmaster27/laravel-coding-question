@@ -42,10 +42,9 @@ class ReportController extends Controller
     }
 
     /**
-     * Выгружаем лог
+     * Выгрузка лога
      *
-     * @param $from
-     * @param $to
+     * @param Request $request
      * @return \Illuminate\Http\JsonResponse
      */
     public function log(Request $request)
