@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Sheep;
 use App\Log;
-use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class SheepController extends Controller
 {
@@ -36,6 +36,10 @@ class SheepController extends Controller
                     $sheep = new Sheep;
                     $sheep->pen_id = $pen;
                     $sheep->save();
+
+                    if ($sheep) {
+                        $this->writeLog("CREATE", $sheep, 0);
+                    }
                 }
             }
         }
@@ -43,11 +47,12 @@ class SheepController extends Controller
 
     /**
      * Рендеринг
+     *
      * @return \Illuminate\Contracts\View\Factory|\Illuminate\View\View
      */
     public function welcome()
     {
-        $currentSheeps = Sheep::where('killed', false)->orderBy('pen_id', 'asc')->get();
+        $currentSheeps = Sheep::orderBy('pen_id', 'asc')->get();
         foreach ($currentSheeps as $sheep) {
             $farm[$sheep->pen_id][] = $sheep;
         }
@@ -58,28 +63,28 @@ class SheepController extends Controller
     /**
      * Добавляем овцу в случайный загон при условии, что их в нем больше 1
      */
-    public function add()
+    public function add($day)
     {
+        $randomPen = Sheep::groupBy('pen_id')
+            ->havingRaw('COUNT(*) > 1')
+            ->inRandomOrder()
+            ->first();
 
-        // TODO: Здесь бы лучше применить запрос с HAVING и COUNT, со случайной сортировкой, но пока не разобрался, как это сделать в Laravel
-        $pens = self::PENS_ID;
-        shuffle($pens);
+        if ($randomPen) {
+            $sheep = new Sheep;
+            $sheep->pen_id = $randomPen->pen_id;
+            $sheep->save();
 
-        foreach ($pens as $pen) {
-            $sheepCountByPen = Sheep::where([
-                'killed' => false,
-                'pen_id' => $pen
-            ])->count();
+            if ($sheep) {
+                $arReturn["created"] = $sheep;
+                $this->writeLog("CREATE", $sheep, $day);
 
+                $moved = $this->move($day);
+                if ($moved) {
+                    $arReturn["moved"] = $moved;
+                }
 
-            if ($sheepCountByPen > 1) {
-                $sheep = new Sheep;
-                $sheep->pen_id = $pen;
-                $sheep->save();
-
-                $this->writeLog("Добавили в загон", $sheep);
-
-                return response()->json($sheep, 200);
+                return response()->json($arReturn, 200);
             }
         }
 
@@ -88,84 +93,77 @@ class SheepController extends Controller
     /**
      * Отправляем овцу на забой
      */
-    public function kill()
+    public function kill($day)
     {
-        $pens = self::PENS_ID;
-        shuffle($pens);
+        $randomPen = Sheep::select('*', DB::raw('COUNT(*) as total'))
+            ->groupBy('pen_id')
+            ->havingRaw('COUNT(*) > 1')
+            ->inRandomOrder()
+            ->first();
 
-        foreach ($pens as $pen) {
+        if ($randomPen) {
+            $randomPen->delete();
 
-            $sheepCountByPen = Sheep::where([
-                'killed' => false,
-                'pen_id' => $pen
-            ])->count();
+            if ($randomPen->trashed()) {
+                $this->writeLog("DELETE", $randomPen, $day);
+                $arReturn["killed"] = $randomPen;
 
-            if ($sheepCountByPen > 1) {
-                $killed = Sheep::where([
-                    'killed' => false,
-                    'pen_id' => $pen
-                ])->first();
-                $killed->killed = true;
-                $killed->save();
-
-                $this->writeLog("Убрали из загона", $killed);
-
-                $arReturn["killed"] = $killed;
-
-                //Если количество овец было 2 (стало 1 после забоя), то мы должны докинуть ей в загон овцу из самого заполненного загона
-                if ($sheepCountByPen == 2) {
-                    $moved = $this->move($pen);
-
-                    if ($moved) {
-                        $arReturn["moved"] = $moved;
-                    }
+                $moved = $this->move($day);
+                if ($moved) {
+                    $arReturn["moved"] = $moved;
                 }
 
                 return response()->json($arReturn, 200);
             }
+
         }
     }
 
     /**
      * Загоняем овцу в загон $to из самого заполненного загона
+     *
      * @param $to
      */
-    private function move($to)
+    private function move($day)
     {
+        $sheepFromTopPen = Sheep::select('*', DB::raw('COUNT(*) as total'))
+            ->groupBy('pen_id')
+            ->havingRaw('COUNT(*) > 1')
+            ->orderByRaw('total DESC')
+            ->first();
 
-        foreach (self::PENS_ID as $pen) {
-            $sheepCountByPen = Sheep::where([
-                'killed' => false,
-                'pen_id' => $pen
-            ])->count();
-            $pensCount[$pen] = $sheepCountByPen;
-        }
+        $sheepToPen = Sheep::select('*', DB::raw('COUNT(*) as total'))
+            ->groupBy('pen_id')
+            ->havingRaw('COUNT(*) = 1')
+            ->inRandomOrder()
+            ->first();
 
-        $biggestPen = array_search(max($pensCount), $pensCount);
+        if ($sheepFromTopPen && $sheepToPen) {
+            $sheepFromTopPen->pen_id = $sheepToPen->pen_id;
+            $sheepFromTopPen->save();
 
-        if ($biggestPen > 1) {
-            $moved = Sheep::where([
-                'killed' => false,
-                'pen_id' => $biggestPen
-            ])->first();
-            $moved->pen_id = $to;
-            $moved->save();
+            if ($sheepFromTopPen) {
+                $this->writeLog("MOVE", $sheepFromTopPen, $day);
 
-            $this->writeLog("Переместили", $moved);
-
-            return $moved;
+                return $sheepFromTopPen;
+            }
         }
     }
 
 
     /**
+     * Пишем лог
+     *
      * @param $text
      * @param $obj
      */
-    private function writeLog($text, $obj)
+    private function writeLog($text, $obj, $day)
     {
         $log = new Log;
-        $log->text = $text . " ID:" . $obj->id . "; " . $obj->pen_id . ";";
+        $log->sheep_id = $obj->id;
+        $log->pen_id = $obj->pen_id;
+        $log->action = $text;
+        $log->day = $day;
         $log->save();
     }
 

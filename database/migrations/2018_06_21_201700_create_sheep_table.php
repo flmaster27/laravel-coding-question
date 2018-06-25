@@ -17,9 +17,9 @@ class CreateSheepTable extends Migration
             $table->increments('id');
             $table->timestamps();
             $table->integer('pen_id')->nullable(false);
-            $table->boolean('killed')->default(false)->nullable(false);
+            $table->softDeletes();
 
-            $table->index(['pen_id', 'killed']);
+            $table->index('pen_id');
         });
     }
 

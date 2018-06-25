@@ -1,14 +1,6 @@
 <?php
 
-/*
-|--------------------------------------------------------------------------
-| Web Routes
-|--------------------------------------------------------------------------
-|
-| Here is where you can register web routes for your application. These
-| routes are loaded by the RouteServiceProvider within a group which
-| contains the "web" middleware group. Now create something great!
-|
-*/
+/*Две страницы - ферма и отчеты*/
 
 Route::get('/', 'SheepController@welcome');
+Route::get('/report', 'ReportController@show');

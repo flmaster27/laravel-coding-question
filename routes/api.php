@@ -17,6 +17,9 @@ Route::middleware('auth:api')->get('/user', function (Request $request) {
     return $request->user();
 });
 
+/****************   API Фермы **************************/
+Route::get('add/{day}', 'SheepController@add');
+Route::get('kill/{day}', 'SheepController@kill');
 
-Route::get('add', 'SheepController@add');
-Route::get('kill', 'SheepController@kill');
+/****************   API Отчетов **************************/
+Route::post('log', 'ReportController@log');
